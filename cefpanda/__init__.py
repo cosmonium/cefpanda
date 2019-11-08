@@ -83,13 +83,14 @@ class CefClientHandler:
         pprint.pprint(kwargs)
 
 class CefTarget():
-    pass
+    def __init__(self):
+        pass
 
 class CefWindowTarget(CefTarget):
     _UI_SCALE = 1.0
 
     def __init__(self, cef, window):
-        super().__init__()
+        CefTarget.__init__(self)
         self.window = window
 
     def set_cef(self, cef):
@@ -127,7 +128,7 @@ class CefWindowTarget(CefTarget):
 
 class CefFrameTarget(CefTarget):
     def __init__(self):
-        super().__init__()
+        CefTarget.__init__(self)
         self.cef = None
         self._cef_node = None
         self.x = 0
@@ -202,7 +203,7 @@ class CefDirectFrameTarget(CefTarget):
 class CEFPanda(DirectObject):
 
     def __init__(self, target=None):
-        super().__init__()
+        DirectObject.__init__(self)
         cef_mod_dir = cefpython.GetModuleDirectory()
         app_settings = {
             "windowless_rendering_enabled": True,
