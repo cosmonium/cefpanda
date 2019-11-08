@@ -207,9 +207,9 @@ class CEFPanda(DirectObject):
         cef_mod_dir = cefpython.GetModuleDirectory()
         app_settings = {
             "windowless_rendering_enabled": True,
-            "locales_dir_path": os.path.join(cef_mod_dir, 'locales'),
-            "resources_dir_path": cefpython.GetModuleDirectory(),
-            "browser_subprocess_path": os.path.join(cef_mod_dir, 'subprocess'),
+            #"locales_dir_path": os.path.join(cef_mod_dir, 'locales'),
+            #"resources_dir_path": cefpython.GetModuleDirectory(),
+            #"browser_subprocess_path": os.path.join(cef_mod_dir, 'subprocess'),
             #"background_color": 4294967295
         }
         command_line_settings = {
