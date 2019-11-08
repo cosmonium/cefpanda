@@ -7,8 +7,12 @@ import warnings
 
 from cefpython3 import cefpython
 from direct.showbase.DirectObject import DirectObject
+from direct.gui.DirectGui import DirectFrame, DGG
 import panda3d.core as p3d
 
+WHEELUP = p3d.PGButton.getReleasePrefix() + p3d.MouseButton.wheelUp().getName() + '-'
+WHEELDOWN = p3d.PGButton.getReleasePrefix() + p3d.MouseButton.wheelDown().getName() + '-'
+WHEELDELTA = 50
 
 class CefClientHandler:
     def __init__(self, texture):
@@ -78,11 +82,126 @@ class CefClientHandler:
         print("Load Error")
         pprint.pprint(kwargs)
 
+class CefTarget():
+    pass
 
-class CEFPanda(DirectObject):
+class CefWindowTarget(CefTarget):
     _UI_SCALE = 1.0
 
+    def __init__(self, cef, window):
+        super().__init__()
+        self.window = window
+
+    def set_cef(self, cef):
+        self.cef = cef
+        card_maker = p3d.CardMaker("browser2d")
+        card_maker.set_frame(-self._UI_SCALE, self._UI_SCALE, -self._UI_SCALE, self._UI_SCALE)
+        node = card_maker.generate()
+        self._cef_node = base.render2d.attachNewNode(node)
+        self._cef_node.set_texture(self.cef._cef_texture)
+        #self._cef_node.set_transparency(p3d.TransparencyAttrib.MAlpha)
+        cef.accept('window-event', self._set_browser_size)
+
+    def update_frame(self):
+        self._set_browser_size(self.window)
+
+    def convert_mouse(self, mouse):
+        posx = (mouse.get_x() + 1.0) / 2.0 * self.cef._cef_texture.get_x_size()
+        posy = (mouse.get_y() + 1.0) / 2.0 * self.cef._cef_texture.get_y_size()
+        posy = self.cef._cef_texture.get_y_size() - posy
+
+        return posx, posy
+
+    def _set_browser_size(self, window=None):
+        if window is None:
+            return
+
+        if window.is_closed():
+            self.cef._shutdown_cef()
+            return
+
+        width = int(round(window.get_x_size() * self._UI_SCALE))
+        height = int(round(window.get_y_size() * self._UI_SCALE))
+
+        self.cef.resize_texture(width, height)
+
+class CefFrameTarget(CefTarget):
     def __init__(self):
+        super().__init__()
+        self.cef = None
+        self._cef_node = None
+        self.x = 0
+        self.y = -400
+        self.width = 400
+        self.height = 400
+
+    def set_cef(self, cef):
+        self.cef = cef
+        card_maker = p3d.CardMaker("browser2d")
+        card_maker.set_frame(self.x, self.x + self.width, self.y, self.y + self.height)
+        node = card_maker.generate()
+        self._cef_node = base.pixel2d.attachNewNode(node)
+        self._cef_node.set_texture(self.cef._cef_texture)
+
+    def update_frame(self):
+        self.cef.resize_texture(self.width, self.height)
+
+    def convert_mouse(self, mouse):
+        pos = self._cef_node.get_relative_point(base.render2d, p3d.Point3(mouse.get_x() ,0, mouse.get_y()))
+        result = (pos.get_x(), -pos.get_z())
+        return result
+
+
+class CefDirectFrameTarget(CefTarget):
+    def __init__(self, scale, width, height):
+        CefTarget.__init__(self)
+        self.scale = scale
+        self.cef = None
+        self.frame = None
+        self.x = 0
+        self.y = -height
+        self.width = width
+        self.height = height
+
+    def set_cef(self, cef):
+        self.cef = cef
+
+    def create(self):
+        if self.frame is not None: return
+        self.frame = DirectFrame(frameTexture=self.cef._cef_texture, state=DGG.NORMAL, frameColor=(1, 1, 1, 1))
+        self.frame['frameSize'] = [self.x * self.scale[0], (self.x + self.width) * self.scale[0],
+                                   self.y * self.scale[1], (self.y + self.height) * self.scale[1]]
+        self.frame.bind(DGG.B1PRESS, self._handle_mouse, [False])
+        self.frame.bind(DGG.B1RELEASE, self._handle_mouse, [True])
+        self.frame.bind(WHEELDOWN, self._handle_mouse_wheel, [False])
+        self.frame.bind(WHEELUP, self._handle_mouse_wheel, [True])
+
+    def _handle_mouse(self, state, event):
+        self.cef._handle_mouse(state)
+
+    def _handle_mouse_wheel(self, state, event):
+        self.cef._handle_mouse_wheel(state)
+
+    def update_frame(self):
+        self.cef.resize_texture(self.width, self.height)
+
+    def convert_mouse(self, mouse):
+        if self.frame is not None:
+            pos = self.frame.get_relative_point(base.render2d, p3d.Point3(mouse.get_x() ,0, mouse.get_y()))
+            result = (pos.get_x() / self.scale[0], -pos.get_z() / self.scale[1])
+            return result
+        else:
+            return None
+
+    def reparent_to(self, parent):
+        self.frame.reparent_to(parent)
+
+    def destroy(self):
+        self.frame = None
+
+class CEFPanda(DirectObject):
+
+    def __init__(self, target=None):
         super().__init__()
         cef_mod_dir = cefpython.GetModuleDirectory()
         app_settings = {
@@ -90,6 +209,7 @@ class CEFPanda(DirectObject):
             "locales_dir_path": os.path.join(cef_mod_dir, 'locales'),
             "resources_dir_path": cefpython.GetModuleDirectory(),
             "browser_subprocess_path": os.path.join(cef_mod_dir, 'subprocess'),
+            #"background_color": 4294967295
         }
         command_line_settings = {
             # Tweaking OSR performance by setting the same Chromium flags as the
@@ -99,7 +219,11 @@ class CEFPanda(DirectObject):
         }
         browser_settings = {
             "windowless_frame_rate": 60,
+            #"background_color": 4294967295
         }
+        if target is None:
+            target = CefWindowTarget(self, base.win)
+        self.target = target
 
         cefpython.Initialize(app_settings, command_line_settings)
         self._cef_texture = p3d.Texture()
@@ -107,17 +231,11 @@ class CEFPanda(DirectObject):
         self._cef_texture.set_component_type(p3d.Texture.TUnsignedByte)
         self._cef_texture.set_format(p3d.Texture.FRgba4)
 
-        card_maker = p3d.CardMaker("browser2d")
-        card_maker.set_frame(-self._UI_SCALE, self._UI_SCALE, -self._UI_SCALE, self._UI_SCALE)
-        node = card_maker.generate()
-        self._cef_node = base.render2d.attachNewNode(node)
-        self._cef_node.set_texture(self._cef_texture)
-        self._cef_node.set_transparency(p3d.TransparencyAttrib.MAlpha)
-
         winhnd = base.win.getWindowHandle().getIntHandle()
         wininfo = cefpython.WindowInfo()
         wininfo.SetAsOffscreen(winhnd)
-        wininfo.SetTransparentPainting(True)
+
+        self.target.set_cef(self)
 
         self.browser = cefpython.CreateBrowserSync(
             wininfo,
@@ -131,12 +249,10 @@ class CEFPanda(DirectObject):
         self._js_func_onload_queue = []
         self.browser.SetClientCallback("OnLoadEnd", self._load_end)
 
-
         self.jsbindings = cefpython.JavascriptBindings()
 
         self.browser.SendFocusEvent(True)
-        self._set_browser_size()
-        self.accept('window-event', self._set_browser_size)
+        self.target.update_frame()
 
         base.buttonThrowers[0].node().setKeystrokeEvent('keystroke')
         self.accept('keystroke', self._handle_text)
@@ -175,13 +291,13 @@ class CEFPanda(DirectObject):
         self._js_func_onload_queue = []
 
     def load_string(self, string):
-        self.load_url(f'data:text/html,{string}')
+        self.load_url('data:text/html,{}'.format(string))
 
     def load_file(self, filepath):
         filepath = p3d.Filename(filepath)
         filepath.make_absolute()
         filepath = filepath.to_os_specific()
-        url = f'file://{filepath}'
+        url = 'file://{}'.format(filepath)
         self.load_url(url)
 
     def load_url(self, url):
@@ -191,13 +307,15 @@ class CEFPanda(DirectObject):
         self._is_loaded = False
         self.browser.GetMainFrame().LoadUrl(url)
 
-    def exec_js_string(self, js_string, *, onload=True):
+    def exec_js_string(self, js_string, *args, **kwargs):
+        onload = kwargs.get('onload', True)
         if onload and not self._is_loaded:
             self._js_onload_queue.append(js_string)
         else:
             self.browser.GetMainFrame().ExecuteJavascript(js_string)
 
-    def exec_js_func(self, js_func, *args, onload=True):
+    def exec_js_func(self, js_func, *args, **kwargs):
+        onload = kwargs.get('onload', True)
         if onload and not self._is_loaded:
             self._js_func_onload_queue.append((js_func, args))
         else:
@@ -215,18 +333,8 @@ class CEFPanda(DirectObject):
         self.jsbindings.SetProperty(name, value)
         self.jsbindings.Rebind()
 
-    def _set_browser_size(self, window=None):
-        if window is None:
-            return
-
-        if window.is_closed():
-            self._shutdown_cef()
-            return
-
-        width = int(round(window.get_x_size() * self._UI_SCALE))
-        height = int(round(window.get_y_size() * self._UI_SCALE))
-
-        # We only want to resize if the window size actually changed.
+    def resize_texture(self, width, height):
+        # We only want to resize if the frame size actually changed.
         if self._cef_texture.get_x_size() != width or self._cef_texture.get_y_size() != height:
             self._cef_texture.set_x_size(width)
             self._cef_texture.set_y_size(height)
@@ -278,11 +386,7 @@ class CEFPanda(DirectObject):
 
     def _get_mouse_pos(self):
         mouse = base.mouseWatcherNode.getMouse()
-        posx = (mouse.get_x() + 1.0) / 2.0 * self._cef_texture.get_x_size()
-        posy = (mouse.get_y() + 1.0) / 2.0 * self._cef_texture.get_y_size()
-        posy = self._cef_texture.get_y_size() - posy
-
-        return posx, posy
+        return self.target.convert_mouse(mouse)
 
     def _handle_mouse(self, mouseup):
         if not self.use_mouse or not base.mouseWatcherNode.has_mouse():
@@ -299,12 +403,28 @@ class CEFPanda(DirectObject):
             cefpython.EVENTFLAG_NONE
         )
 
+    def _handle_mouse_wheel(self, mouseup):
+        if not self.use_mouse or not base.mouseWatcherNode.has_mouse():
+            return
+
+        posx, posy = self._get_mouse_pos()
+
+        self.browser.SendMouseWheelEvent(
+            posx,
+            posy,
+            0,
+            WHEELDELTA if mouseup else -WHEELDELTA,
+            cefpython.EVENTFLAG_NONE
+        )
+
     def _cef_message_loop(self, task):
         cefpython.MessageLoopWork()
 
         if self.use_mouse and base.mouseWatcherNode.has_mouse():
-            posx, posy = self._get_mouse_pos()
-            self.browser.SendMouseMoveEvent(posx, posy, mouseLeave=False)
+            pos = self._get_mouse_pos()
+            if pos is not None:
+                posx, posy = pos
+                self.browser.SendMouseMoveEvent(posx, posy, mouseLeave=False)
 
         return task.cont
 
