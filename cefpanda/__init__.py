@@ -201,8 +201,9 @@ class CefDirectFrameTarget(CefTarget):
 
 class CEFPanda(DirectObject):
 
-    def __init__(self, target=None):
+    def __init__(self, target=None, use_srgb=False):
         DirectObject.__init__(self)
+        self.use_srgb = use_srgb
         # Common application settings
         app_settings = {
             "windowless_rendering_enabled": True,
@@ -243,9 +244,6 @@ class CEFPanda(DirectObject):
 
         cefpython.Initialize(app_settings, command_line_settings)
         self._cef_texture = p3d.Texture()
-        self._cef_texture.set_compression(p3d.Texture.CMOff)
-        self._cef_texture.set_component_type(p3d.Texture.TUnsignedByte)
-        self._cef_texture.set_format(p3d.Texture.FRgba4)
 
         winhnd = base.win.getWindowHandle().getIntHandle()
         wininfo = cefpython.WindowInfo()
@@ -360,6 +358,8 @@ class CEFPanda(DirectObject):
             img.fill(0, 0, 0)
             img.alpha_fill(0)
             self._cef_texture.load(img)
+            if self.use_srgb:
+                self._cef_texture.set_format(p3d.Texture.F_srgb_alpha)
             self.browser.WasResized()
 
     def _handle_key(self, keycode):
