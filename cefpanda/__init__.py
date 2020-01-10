@@ -233,6 +233,7 @@ class CEFPanda(DirectObject):
             # cefpython SDL2 example (also see cefpython issue #240)
             "disable-gpu-compositing": "",
             "enable-begin-frame-scheduling": "",
+            "disable-features": "TouchpadAndWheelScrollLatching,AsyncWheelEvents",
         }
         browser_settings = {
             "windowless_frame_rate": 60,
