@@ -235,6 +235,8 @@ class CEFPanda(DirectObject):
             "enable-begin-frame-scheduling": "",
             "disable-features": "TouchpadAndWheelScrollLatching,AsyncWheelEvents",
         }
+        if sys.platform != "darwin":
+            command_line_settings['disable-features'] = "TouchpadAndWheelScrollLatching,AsyncWheelEvents"
         browser_settings = {
             "windowless_frame_rate": 60,
             #"background_color": 4294967295
