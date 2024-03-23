@@ -233,7 +233,6 @@ class CEFPanda(DirectObject):
             # cefpython SDL2 example (also see cefpython issue #240)
             "disable-gpu-compositing": "",
             "enable-begin-frame-scheduling": "",
-            "disable-features": "TouchpadAndWheelScrollLatching,AsyncWheelEvents",
         }
         if sys.platform != "darwin":
             command_line_settings['disable-features'] = "TouchpadAndWheelScrollLatching,AsyncWheelEvents"
