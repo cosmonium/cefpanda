@@ -176,6 +176,9 @@ class CefDirectFrameTarget(CefTarget):
         self.frame.bind(WHEELDOWN, self._handle_mouse_wheel, [False])
         self.frame.bind(WHEELUP, self._handle_mouse_wheel, [True])
 
+    def setPos(self, *args):
+        self.frame.setPos(*args)
+
     def _handle_mouse(self, state, event):
         self.cef._handle_mouse(state)
 
@@ -193,11 +196,14 @@ class CefDirectFrameTarget(CefTarget):
         else:
             return None
 
-    def reparent_to(self, parent):
+    def reparentTo(self, parent):
         self.frame.reparent_to(parent)
 
     def destroy(self):
         self.frame = None
+
+    reparent_to = reparentTo
+    set_pos = setPos
 
 class CEFPanda(DirectObject):
 
