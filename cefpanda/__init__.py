@@ -312,6 +312,11 @@ class CEFPanda(DirectObject):
         self._js_onload_queue = []
         self._js_func_onload_queue = []
 
+    def set_target(self, target):
+        self.target = target
+        self.target.set_cef(self)
+        self.target.update_frame()
+
     def load_string(self, string):
         self.load_url('data:text/html,{}'.format(string))
 
