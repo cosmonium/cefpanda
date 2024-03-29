@@ -176,6 +176,9 @@ class CefDirectFrameTarget(CefTarget):
         self.frame.bind(WHEELDOWN, self._handle_mouse_wheel, [False])
         self.frame.bind(WHEELUP, self._handle_mouse_wheel, [True])
 
+    def frameSize(self):
+        return self.frame['frameSize']
+
     def setPos(self, *args):
         self.frame.setPos(*args)
 
@@ -202,6 +205,7 @@ class CefDirectFrameTarget(CefTarget):
     def destroy(self):
         self.frame = None
 
+    frame_size = frameSize
     reparent_to = reparentTo
     set_pos = setPos
 
