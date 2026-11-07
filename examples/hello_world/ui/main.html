@@ -9,8 +9,17 @@
 <body>
   <h1>Hello World</h1>
 <script>
-    call_py1();
-    call_py2();
+    // The Python functions are sent asynchronously to the page by CEF, so they might not be
+    // available yet when the page is parsed: wait for them before calling them
+    function call_py() {
+        if (typeof call_py1 === 'undefined' || typeof call_py2 === 'undefined') {
+            setTimeout(call_py, 10);
+            return;
+        }
+        call_py1();
+        call_py2();
+    }
+    call_py();
 </script>
 </body>
 </html>
