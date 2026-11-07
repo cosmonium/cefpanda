@@ -1,7 +1,8 @@
 import atexit
-import os
+import pathlib
 import pprint
 import sys
+import urllib.parse
 import warnings
 
 from cefpython3 import cefpython
@@ -43,14 +44,14 @@ class CefClientHandler:
             tex = self.texture
             if width != tex.get_x_size() or height != tex.get_y_size():
                 return
-            tex.set_ram_image(paint_buffer.GetString(mode="bgra", origin="bottom-left"))
+            tex.set_ram_image(paint_buffer.GetBytes(mode="bgra", origin="bottom-left"))
 
             if self.popup_show:
                 self._paint_popup()
         elif element_type == cefpython.PET_POPUP:
             if width != self.popup_img.get_x_size() or height != self.popup_img.get_y_size():
                 return
-            imgdata = paint_buffer.GetString(mode="rgba", origin="top-left")
+            imgdata = paint_buffer.GetBytes(mode="rgba", origin="top-left")
             posx, posy = 0, 0
             for i in range(0, len(imgdata), 4):
                 self.popup_img.set_xel_val(posx, posy, *imgdata[i:i+3])
@@ -218,26 +219,8 @@ class CEFPanda(DirectObject):
         app_settings = {
             "windowless_rendering_enabled": True,
         }
-        cef_mod_dir_root = cefpython.GetModuleDirectory()
         if sys.platform == "darwin":
             app_settings['external_message_pump'] = True
-            # Detect if we are running in a bundled app, and if so fix the path
-            # to the framework resources
-            main_dir = p3d.ExecutionEnvironment.getEnvironmentVariable("MAIN_DIR")
-            if main_dir.startswith(cef_mod_dir_root):
-                app_settings['browser_subprocess_path'] = os.path.normpath(
-                    os.path.join(cef_mod_dir_root, '../Frameworks/subprocess')
-                )
-                app_settings['framework_dir_path'] = os.path.normpath(
-                    os.path.join(
-                        cef_mod_dir_root,
-                        '../Resources/Chromium Embedded Framework.framework'
-                    )
-                )
-        else:
-            app_settings['locales_dir_path'] = os.path.join(cef_mod_dir_root, 'locales')
-            app_settings['resources_dir_path'] = cef_mod_dir_root
-            app_settings['browser_subprocess_path'] = os.path.join(cef_mod_dir_root, 'subprocess')
         command_line_settings = {
             # Tweaking OSR performance by setting the same Chromium flags as the
             # cefpython SDL2 example (also see cefpython issue #240)
@@ -254,7 +237,7 @@ class CEFPanda(DirectObject):
             target = CefWindowTarget(self, base.win)
         self.target = target
 
-        cefpython.Initialize(app_settings, command_line_settings)
+        cefpython.Initialize(settings=app_settings, switches=command_line_settings)
         self._cef_texture = p3d.Texture()
 
         winhnd = base.win.getWindowHandle().getIntHandle()
@@ -264,9 +247,9 @@ class CEFPanda(DirectObject):
         self.target.set_cef(self)
 
         self.browser = cefpython.CreateBrowserSync(
-            wininfo,
-            browser_settings,
-            navigateUrl=''
+            window_info=wininfo,
+            settings=browser_settings,
+            url=''
         )
         self.browser.SetClientHandler(CefClientHandler(self._cef_texture))
 
@@ -278,7 +261,7 @@ class CEFPanda(DirectObject):
 
         self.jsbindings = cefpython.JavascriptBindings()
 
-        self.browser.SendFocusEvent(True)
+        self.browser.SetFocus(True)
         self.target.update_frame()
 
         base.buttonThrowers[0].node().setKeystrokeEvent('keystroke')
@@ -334,13 +317,15 @@ class CEFPanda(DirectObject):
         self.target.update_frame()
 
     def load_string(self, string):
-        self.load_url('data:text/html,{}'.format(string))
+        # cefpython does not encode the urls, so characters like '#' or '%' must be escaped
+        self.load_url('data:text/html;charset=utf-8,{}'.format(urllib.parse.quote(string, safe='')))
 
     def load_file(self, filepath):
         filepath = p3d.Filename(filepath)
         filepath.make_absolute()
         filepath = filepath.to_os_specific()
-        url = 'file://{}'.format(filepath)
+        # cefpython does not encode the urls, so spaces and special characters in the path must be escaped
+        url = pathlib.Path(filepath).as_uri()
         self.load_url(url)
 
     def load_url(self, url):
