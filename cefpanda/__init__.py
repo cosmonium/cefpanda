@@ -271,6 +271,7 @@ class CEFPanda(DirectObject):
         self.browser.SetClientHandler(CefClientHandler(self._cef_texture))
 
         self._is_loaded = False
+        self._is_shutdown = False
         self._js_onload_queue = []
         self._js_func_onload_queue = []
         self.browser.SetClientCallback("OnLoadEnd", self._load_end)
@@ -300,7 +301,18 @@ class CEFPanda(DirectObject):
         self.use_mouse = True
 
     def _shutdown_cef(self):
-        self.browser.CloseBrowser()
+        # This can be called several times (window closed, then at exit)
+        # but CEF can only be shut down once
+        if self._is_shutdown:
+            return
+        self._is_shutdown = True
+        if self._msg_loop_task is not None:
+            base.taskMgr.remove(self._msg_loop_task)
+            self._msg_loop_task = None
+        # The browser must be force-closed and its reference released
+        # for CEF to shut down cleanly
+        self.browser.CloseBrowser(True)
+        self.browser = None
         cefpython.Shutdown()
 
     def _load_end(self, *_args, **_kwargs):
@@ -451,6 +463,8 @@ class CEFPanda(DirectObject):
         )
 
     def _cef_message_loop(self, task):
+        if self._is_shutdown:
+            return task.done
         cefpython.MessageLoopWork()
 
         if self.use_mouse and base.mouseWatcherNode.has_mouse():
